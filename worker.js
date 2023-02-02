@@ -1,83 +1,62 @@
-const canvas = new OffscreenCanvas(1, 1);
+const canvas = new OffscreenCanvas(1000,1000);
 const ctx = canvas.getContext("2d");
 const abortController = new AbortController();
-
+var streamReader=[];
+var firstStream=null
 let config = {
   size: 250,
   margin: 20,
   position: 'bottom-left', // top-left, top-right, bottom-left, bottom-right
 }
-
-const calculateAvatarPosition = (width, height) => {
-  let dx, dy;
-  switch (config.position) {
-    case 'top-left':
-      dx = config.margin;
-      dy = config.margin;
-      break;
-    case 'top-right':
-      dx = width - (config.size + config.margin);
-      dy = config.margin;
-      break;
-    case 'bottom-right':
-      dx = width - (config.size + config.margin);
-      dy = height - (config.size + config.margin);
-      break;
-    case 'bottom-left':
-      dx = config.margin;
-      dy = height - (config.size + config.margin);
-      break;
-    default:
-      dx = config.margin;
-      dy = height - (config.size + config.margin);
-      break;
-  }
-
-  return { dx, dy };
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
-const compose = (cameraReadableStream, screenReadableStream, sink) => {
-  const camaraReader = cameraReadableStream.getReader();
-  streamReader = [camaraReader];
+const compose = (ReadableStreams, sink) => {
+
   const { signal } = abortController
-  let screenFrame;
+  let writeFrames;
   const transformer = new TransformStream({
     async transform(cameraFrame, controller) {
+
       for (i = 0; i < streamReader.length; i++) {
-        if (screenFrame) {
-          screenFrame.close();
-        }
         streamReader[i].read().then((frame)=>{
-          screenFrame = frame.value;
-          if (screenFrame && screenFrame?.displayWidth > 0) {
-            canvas.width = screenFrame.displayWidth
-            canvas.height = screenFrame.displayHeight;
-            ctx.drawImage(screenFrame, 0, 0, canvas.width, canvas.height);
-            ctx.drawImage(cameraFrame, 50, 180, 250, 70, 271, 220, 40, 20);
-  
-            const newFrame = new VideoFrame(canvas, { timestamp: 0 });
-            cameraFrame.close();
-            controller.enqueue(newFrame);
-          } else {
-            controller.enqueue(cameraFrame);
-          }
+          writeFrames = frame.value;
+        //  console.log(writeFrames.displayWidth,cameraFrame.displayWidth)
+          ctx.drawImage(writeFrames, writeFrames.displayWidth,writeFrames.displayHeight, 400, 400);
+          writeFrames.close();
+         
         })
 
       }
+      ctx.drawImage(cameraFrame, 0, 0, 900, 900, 0,0 , 400, 400);
 
+      const newFrame = new VideoFrame(canvas, { timestamp: 0 });
 
+      cameraFrame.close();
+      controller.enqueue(newFrame);
     }
   })
 
-  screenReadableStream.pipeThrough(transformer, { signal }).pipeTo(sink);
+  ReadableStreams.pipeThrough(transformer, { signal }).pipeTo(sink);
 }
 
 onmessage = async (event) => {
   const { operation } = event.data;
   switch (operation) {
-    case 'compose':
-      const { cameraReadableStream, screenReadableStream, sink } = event.data;
-      compose(cameraReadableStream, screenReadableStream, sink);
+    case 'addStream':
+
+      const { newReadableStream, sink } = event.data;
+      console.log(newReadableStream, sink)
+      console.log(event.data)
+      if(firstStream!=null){
+        streamReader.push(newReadableStream.getReader())
+      }
+      else{
+        firstStream = event.data.newReadableStream,
+        compose(event.data.newReadableStream, event.data.sink);
+      }
+     
       break;
     case 'stop':
       abortController.abort();

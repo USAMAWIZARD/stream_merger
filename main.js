@@ -33,6 +33,29 @@ const start = async () => {
   const { readable: cameraReadableStream } = new MediaStreamTrackProcessor({ track: cameraTrack });
   cameraVideo.srcObject = cameraStream;
 
+ cameraStream1 = await navigator.mediaDevices.getUserMedia({ video:true, audio: true });
+ cameraStream1.width=10
+ cameraStream1.width=10
+
+ const constraints = {
+  width: {min: 630, ideal: 1250},
+  height: {min: 480, ideal: 720},
+  advanced: [
+    {width: 1900, height: 1250},
+   // {aspectRatio: 1.333}
+  ]
+};
+ await cameraStream1.getVideoTracks()[0].applyConstraints({
+  width: 300,
+  height: 360
+}).catch(e => {
+  console.error('Error while applying capture constraints:', e.message);
+});
+ const cameraTrack1 =cameraStream1.getVideoTracks()[0]
+ console.log(cameraStream1.getVideoTracks()[0].getCapabilities())
+ const { readable: cameraReadableStream1 } = new MediaStreamTrackProcessor({ track: cameraTrack1 });
+
+
   // get screen stream
   screenStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
   const [screenTrack] = screenStream.getVideoTracks();
@@ -42,17 +65,36 @@ const start = async () => {
   // create a generator 
   const composedTrackGenerator = new MediaStreamTrackGenerator({ kind: 'video' });
   const sink = composedTrackGenerator.writable;
-
+  var newReadableStream =screenReadableStream
+  
   worker.postMessage({
-    operation: 'compose',
-    cameraReadableStream,
-    screenReadableStream,
+    operation: 'addStream',
+    newReadableStream,
     sink,
   }, [
-    cameraReadableStream,
-    screenReadableStream,
+    newReadableStream,
     sink,
   ]);
+  newReadableStream =cameraReadableStream1
+
+  worker.postMessage({
+    operation: 'addStream',
+    newReadableStream,
+    
+  }, [
+    newReadableStream,
+  ]);
+
+  newReadableStream =cameraReadableStream
+
+  worker.postMessage({
+    operation: 'addStream',
+    newReadableStream,
+    
+  }, [
+    newReadableStream,
+  ]);
+
 
   let audioTrack;
   // mix audio streams if screen has one
